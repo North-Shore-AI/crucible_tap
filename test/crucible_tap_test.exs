@@ -76,8 +76,26 @@ defmodule CrucibleTapTest do
 
     assert TapSpec.new!(id: "gate", signal_type: :final_logits, kind: :gate).kind == :gate
 
+    assert TapSpec.active?(
+             TapSpec.new!(id: "inject", signal_type: :middle_residuals, kind: :inject)
+           )
+
+    assert TapSpec.passive?(TapSpec.new!(id: "read", signal_type: :final_logits, kind: :read))
+
     assert {:error, {:unknown_tap_kind, :mutate}} =
              TapSpec.new(id: "bad", signal_type: :final_logits, kind: :mutate)
+  end
+
+  test "portable layer selectors resolve across block counts" do
+    assert TapSelector.resolve_layers(:first, 12) == [0]
+    assert TapSelector.resolve_layers(:middle, 12) == [6]
+    assert TapSelector.resolve_layers(:last, 12) == [11]
+    assert TapSelector.resolve_layers({:fraction, 0.25}, 12) == [3]
+    assert TapSelector.resolve_layers({:last_n, 3}, 12) == [9, 10, 11]
+    assert TapSelector.resolve_layers({:indices, [0, 4, 8]}, 12) == [0, 4, 8]
+
+    assert {:ok, {:named, "decoder.final_norm"}} =
+             TapSelector.parse_keyword("named:decoder.final_norm")
   end
 
   test "builds trajectory taps as plan-level combinators" do
@@ -154,8 +172,20 @@ defmodule CrucibleTapTest do
         adapter: :bumblebee,
         model_family: :fixture,
         nodes: [
-          [id: "h4", signal_type: :middle_residuals, layer_index: 4, layer_name: "block.4"],
-          [id: "h8", signal_type: :middle_residuals, layer_index: 8, layer_name: "block.8"]
+          [
+            id: "h4",
+            signal_type: :middle_residuals,
+            layer_index: 4,
+            layer_name: "block.4",
+            capture_modes: [:summary, :compressed_vector]
+          ],
+          [
+            id: "h8",
+            signal_type: :middle_residuals,
+            layer_index: 8,
+            layer_name: "block.8",
+            capture_modes: [:summary, :compressed_vector]
+          ]
         ]
       )
 
@@ -185,6 +215,96 @@ defmodule CrucibleTapTest do
     assert {:error, report} = PlanCompiler.compile(required_plan, surface)
     assert [%{tap_id: "required"}] = report.unsupported_required
     refute CapabilityReport.ok?(report)
+  end
+
+  test "required and optional hidden-state taps fail closed or degrade explicitly" do
+    surface = Surface.new!(adapter: :bumblebee, model_family: :gpt2, nodes: [])
+
+    required_plan = TapPlan.new!([[id: "hidden", signal_type: :hidden_state, required?: true]])
+    optional_plan = TapPlan.new!([[id: "hidden", signal_type: :hidden_state, required?: false]])
+
+    assert {:error, report} = PlanCompiler.compile(required_plan, surface)
+    assert [%{tap_id: "hidden", reason: :no_surface_node}] = report.unsupported_required
+
+    assert {:ok, compiled} = PlanCompiler.compile(optional_plan, surface)
+    assert [%{tap_id: "hidden", reason: :no_surface_node}] = compiled.report.unsupported_optional
+  end
+
+  test "generation step logits required and optional behavior is explicit" do
+    surface = Surface.new!(adapter: :bumblebee, model_family: :gpt2, nodes: [])
+
+    assert {:error, report} =
+             PlanCompiler.compile(
+               TapPlan.new!([[id: "step-logits", signal_type: :generation_step_logits]]),
+               surface
+             )
+
+    assert [%{reason: :no_surface_node}] = report.unsupported_required
+
+    assert {:ok, compiled} =
+             PlanCompiler.compile(
+               TapPlan.new!([
+                 [id: "step-logits", signal_type: :generation_step_logits, required?: false]
+               ]),
+               surface
+             )
+
+    assert [%{reason: :no_surface_node}] = compiled.report.unsupported_optional
+  end
+
+  test "V5 signal tap classes compile when the surface exposes them" do
+    surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [
+          [id: "attn", signal_type: :attention_weights, operations: [:read]],
+          [id: "resid", signal_type: :residual_stream, operations: [:read]],
+          [id: "mlp", signal_type: :mlp_activation, operations: [:read]],
+          [id: "kv", signal_type: :kv_cache_metadata, operations: [:read]],
+          [id: "router", signal_type: :router_logits, operations: [:read]],
+          [id: "experts", signal_type: :moe_expert_weights, operations: [:read]]
+        ]
+      )
+
+    plan =
+      TapPlan.new!([
+        [id: "attn", signal_type: :attention_weights],
+        [id: "resid", signal_type: :residual_stream],
+        [id: "mlp", signal_type: :mlp_activation],
+        [id: "kv", signal_type: :kv_cache_metadata],
+        [id: "router", signal_type: :router_logits],
+        [id: "experts", signal_type: :moe_expert_weights]
+      ])
+
+    assert {:ok, compiled} = PlanCompiler.compile(plan, surface)
+
+    assert compiled.matched |> Enum.map(& &1.tap_id) |> Enum.sort() ==
+             ~w(attn experts kv mlp resid router)
+  end
+
+  test "active taps cannot be satisfied by passive read-only nodes" do
+    passive_surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [[id: "resid", signal_type: :residual_stream, operations: [:read]]]
+      )
+
+    active_plan = TapPlan.new!([[id: "inject", signal_type: :residual_stream, kind: :inject]])
+
+    assert {:error, report} = PlanCompiler.compile(active_plan, passive_surface)
+    assert [%{reason: :unsupported_operation}] = report.unsupported_required
+
+    active_surface =
+      Surface.new!(
+        adapter: :native_fixture,
+        model_family: :fixture,
+        nodes: [[id: "resid", signal_type: :residual_stream, operations: [:read, :fuse]]]
+      )
+
+    assert {:ok, compiled} = PlanCompiler.compile(active_plan, active_surface)
+    assert [%{metadata: %{active?: true, required_operation: :fuse}}] = compiled.matched
   end
 
   test "capability negotiation returns rich dropped optional reasons" do

@@ -44,5 +44,7 @@ defmodule CrucibleTap.CapabilityReport do
   end
 
   defp normalize_reason(:no_matching_surface_node), do: :no_surface_node
+  defp normalize_reason(:unsupported_operation), do: :surface_operation_unavailable
+  defp normalize_reason(:unsupported_capture_mode), do: :surface_capture_mode_unavailable
   defp normalize_reason(reason), do: reason
 end

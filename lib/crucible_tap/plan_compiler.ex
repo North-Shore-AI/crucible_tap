@@ -8,43 +8,34 @@ defmodule CrucibleTap.PlanCompiler do
     CompiledPlan,
     Surface,
     TapPlan,
-    TapResult
+    TapResult,
+    TapSpec
   }
 
   def compile(%TapPlan{} = plan, %Surface{} = surface) do
     {matched, unsupported_required, unsupported_optional} =
       Enum.reduce(plan.specs, {[], [], []}, fn spec, {matched, required, optional} ->
         nodes = Surface.matching_nodes(surface, spec.selector)
+        {node_matches, node_unsupported} = compile_nodes(spec, nodes, surface)
 
-        if nodes == [] do
-          result = %TapResult{
-            tap_id: spec.id,
-            status: :unsupported,
-            reason: :no_surface_node,
-            metadata: %{kind: spec.kind}
-          }
+        cond do
+          node_matches != [] ->
+            {node_matches ++ matched, required, node_unsupported ++ optional}
 
-          if spec.required? do
-            {matched, [result | required], optional}
-          else
-            {matched, required, [result | optional]}
-          end
-        else
-          results =
-            Enum.map(nodes, fn node ->
-              %TapResult{
-                tap_id: spec.id,
-                status: :matched,
-                surface_node_id: node.id,
-                metadata: %{
-                  layer_name: node.layer_name,
-                  kind: spec.kind,
-                  layer_index: node.layer_index
-                }
-              }
-            end)
+          node_unsupported != [] and spec.required? ->
+            {matched, node_unsupported ++ required, optional}
 
-          {results ++ matched, required, optional}
+          node_unsupported != [] ->
+            {matched, required, node_unsupported ++ optional}
+
+          true ->
+            result = unsupported_result(spec, :no_surface_node, surface)
+
+            if spec.required? do
+              {matched, [result | required], optional}
+            else
+              {matched, required, [result | optional]}
+            end
         end
       end)
 
@@ -72,6 +63,60 @@ defmodule CrucibleTap.PlanCompiler do
       {:error, report}
     end
   end
+
+  defp compile_nodes(%TapSpec{} = spec, nodes, %Surface{} = surface) do
+    nodes
+    |> Enum.map(&compile_node(spec, &1, surface))
+    |> Enum.split_with(&(&1.status == :matched))
+  end
+
+  defp compile_node(%TapSpec{} = spec, node, %Surface{} = surface) do
+    cond do
+      required_operation(spec) not in node.operations ->
+        unsupported_result(spec, :unsupported_operation, surface, node)
+
+      spec.signal_spec.capture_mode not in node.capture_modes ->
+        unsupported_result(spec, :unsupported_capture_mode, surface, node)
+
+      true ->
+        %TapResult{
+          tap_id: spec.id,
+          status: :matched,
+          surface_node_id: node.id,
+          metadata: %{
+            layer_name: node.layer_name,
+            kind: spec.kind,
+            active?: TapSpec.active?(spec),
+            layer_index: node.layer_index,
+            required_operation: required_operation(spec),
+            capture_mode: spec.signal_spec.capture_mode
+          }
+        }
+    end
+  end
+
+  defp unsupported_result(%TapSpec{} = spec, reason, %Surface{} = surface, node \\ nil) do
+    %TapResult{
+      tap_id: spec.id,
+      status: :unsupported,
+      surface_node_id: if(node, do: node.id),
+      reason: reason,
+      metadata: %{
+        kind: spec.kind,
+        active?: TapSpec.active?(spec),
+        limitation: :surface,
+        adapter: surface.adapter,
+        model_family: surface.model_family,
+        required_operation: required_operation(spec),
+        capture_mode: spec.signal_spec.capture_mode
+      }
+    }
+  end
+
+  defp required_operation(%TapSpec{kind: :inject}), do: :fuse
+  defp required_operation(%TapSpec{kind: :gate}), do: :gate
+  defp required_operation(%TapSpec{kind: :auxiliary}), do: :probe
+  defp required_operation(%TapSpec{}), do: :read
 
   defp layer_descriptors(%TapPlan{} = plan) do
     plan.specs

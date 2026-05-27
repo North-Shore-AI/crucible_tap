@@ -44,6 +44,9 @@ defmodule CrucibleTap.TapSpec do
     end
   end
 
+  def active?(%__MODULE__{kind: kind}), do: kind in [:inject, :gate]
+  def passive?(%__MODULE__{} = spec), do: not active?(spec)
+
   defp normalize_signal_spec(%{signal_spec: %SignalSpec{} = spec}), do: {:ok, spec}
 
   defp normalize_signal_spec(attrs) do
