@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-labelledby="title desc">
+  <title id="title">crucible_tap logo</title>
+  <desc id="desc">A glass hexagonal instrument panel with amber and cyan probe paths.</desc>
+  <defs>
+    <linearGradient id="panel" x1="32" y1="20" x2="168" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17364a"/>
+      <stop offset="0.5" stop-color="#10151f"/>
+      <stop offset="1" stop-color="#271707"/>
+    </linearGradient>
+    <linearGradient id="probe" x1="48" y1="54" x2="154" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5ff8ff"/>
+      <stop offset="1" stop-color="#ffb23e"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="clip">
+      <polygon points="100,12 176,56 176,144 100,188 24,144 24,56"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <polygon points="100,12 176,56 176,144 100,188 24,144 24,56" fill="url(#panel)"/>
+    <path d="M50 58 H150 M42 82 H158 M42 118 H158 M50 142 H150" stroke="#d9faff" stroke-opacity="0.16" stroke-width="1.4"/>
+    <path d="M60 146 L92 100 L76 72" stroke="#5ff8ff" stroke-width="7" stroke-linecap="round" fill="none" filter="url(#softGlow)"/>
+    <path d="M140 52 L108 100 L126 132" stroke="#ffb23e" stroke-width="7" stroke-linecap="round" fill="none" filter="url(#softGlow)"/>
+    <circle cx="100" cy="100" r="22" fill="#d7fbff" fill-opacity="0.09" stroke="url(#probe)" stroke-width="3"/>
+    <circle cx="100" cy="100" r="9" fill="#10151f" stroke="#ffffff" stroke-opacity="0.88" stroke-width="2"/>
+    <g fill="#0d1118" stroke-width="3">
+      <circle cx="76" cy="72" r="8" stroke="#5ff8ff"/>
+      <circle cx="60" cy="146" r="8" stroke="#5ff8ff"/>
+      <circle cx="140" cy="52" r="8" stroke="#ffb23e"/>
+      <circle cx="126" cy="132" r="8" stroke="#ffb23e"/>
+    </g>
+    <path d="M78 42 C95 34 117 34 134 42" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2" fill="none"/>
+  </g>
+  <polygon points="100,12 176,56 176,144 100,188 24,144 24,56" fill="none" stroke="#ffd08a" stroke-width="3"/>
+</svg>
