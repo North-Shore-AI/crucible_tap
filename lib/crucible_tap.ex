@@ -10,4 +10,7 @@ defmodule CrucibleTap do
 
   @doc "Returns the package version."
   def version, do: @version
+
+  @doc "Builds a tap plan."
+  defdelegate plan!(specs, attrs \\ []), to: CrucibleTap.TapPlan, as: :new!
 end

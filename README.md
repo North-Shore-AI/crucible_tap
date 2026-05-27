@@ -38,4 +38,36 @@ This package owns tap plans, selectors, capture bounds, capability reports, and
 tap results. It does not execute model graphs, persist traces, or choose
 policies.
 
+## Usage
+
+```elixir
+alias CrucibleTap.{PlanCompiler, Surface, TapPlan}
+
+surface =
+  Surface.new!(
+    adapter: :bumblebee,
+    model_family: :qwen3,
+    nodes: [
+      [
+        id: "q-layer-2",
+        signal_type: :attention_q,
+        layer_name: "decoder.blocks.2.self_attention.query",
+        layer_index: 2
+      ]
+    ]
+  )
+
+plan =
+  TapPlan.new!([
+    [
+      id: "capture-q",
+      signal_type: :attention_q,
+      layers: [2],
+      selector: %{layer_name: "decoder.blocks.*.self_attention.query"}
+    ]
+  ])
+
+{:ok, compiled} = PlanCompiler.compile(plan, surface)
+```
+
 Documentation can be generated with `mix docs` and published to HexDocs.
