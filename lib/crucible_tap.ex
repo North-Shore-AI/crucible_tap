@@ -13,4 +13,7 @@ defmodule CrucibleTap do
 
   @doc "Builds a tap plan."
   defdelegate plan!(specs, attrs \\ []), to: CrucibleTap.TapPlan, as: :new!
+
+  @doc "Builds a plan-level trajectory tap from multiple layer captures."
+  defdelegate trajectory_tap(id, layers, opts \\ []), to: CrucibleTap.PlanBuilder
 end

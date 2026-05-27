@@ -55,6 +55,7 @@ defmodule CrucibleTapTest do
         id: "late-logits",
         signal_type: :final_logits,
         operations: [:read, :route_on],
+        kind: :read,
         layers: [:final],
         tokens: [-1],
         bounds: %{top_k: 10}
@@ -63,16 +64,35 @@ defmodule CrucibleTapTest do
     plan = TapPlan.new!([spec], plan_id: "plan-1")
 
     assert spec.signal_spec.operations == [:read, :route_on]
+    assert spec.kind == :read
     assert spec.selector.signal_type == :final_logits
     assert spec.bounds.top_k == 10
     assert plan.specs == [spec]
+  end
+
+  test "validates active tap kinds" do
+    assert TapSpec.new!(id: "inject", signal_type: :middle_residuals, kind: :inject).kind ==
+             :inject
+
+    assert TapSpec.new!(id: "gate", signal_type: :final_logits, kind: :gate).kind == :gate
+
+    assert {:error, {:unknown_tap_kind, :mutate}} =
+             TapSpec.new(id: "bad", signal_type: :final_logits, kind: :mutate)
+  end
+
+  test "builds trajectory taps as plan-level combinators" do
+    plan = CrucibleTap.trajectory_tap("route", [4, 8, 12])
+
+    assert Enum.map(plan.specs, & &1.signal_spec.layers) == [[4], [8], [12]]
+    assert Enum.all?(plan.specs, &(&1.signal_spec.capture_mode == :compressed_vector))
+    assert Enum.all?(plan.specs, &(&1.kind == :read))
   end
 
   test "surfaces expose capabilities" do
     surface =
       Surface.new!(
         adapter: :bumblebee,
-        model_family: :qwen3,
+        model_family: :fixture_decoder,
         nodes: [
           [
             id: "attn",
@@ -96,7 +116,7 @@ defmodule CrucibleTapTest do
     surface =
       Surface.new!(
         adapter: :bumblebee,
-        model_family: :qwen3,
+        model_family: :fixture_decoder,
         nodes: [
           [
             id: "q",
@@ -124,11 +144,30 @@ defmodule CrucibleTapTest do
 
     assert {:ok, compiled} = PlanCompiler.compile(plan, surface)
     assert [%{tap_id: "q-layer-2", surface_node_id: "q"}] = compiled.matched
+    assert compiled.hooks == ["decoder.blocks.2.self_attention.query"]
     assert CapabilityReport.ok?(compiled.report)
   end
 
+  test "plan compiler emits per-layer descriptors" do
+    surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [
+          [id: "h4", signal_type: :middle_residuals, layer_index: 4, layer_name: "block.4"],
+          [id: "h8", signal_type: :middle_residuals, layer_index: 8, layer_name: "block.8"]
+        ]
+      )
+
+    plan = CrucibleTap.trajectory_tap("traj", [4, 8])
+
+    assert {:ok, compiled} = PlanCompiler.compile(plan, surface)
+    assert compiled.layer_descriptors[4].capture == :compressed_vector
+    assert compiled.global_layer_options == [output_hidden_states: true]
+  end
+
   test "plan compiler reports unsupported optional and required taps" do
-    surface = Surface.new!(adapter: :bumblebee, model_family: :qwen3, nodes: [])
+    surface = Surface.new!(adapter: :bumblebee, model_family: :fixture_decoder, nodes: [])
 
     optional_plan =
       TapPlan.new!([
@@ -146,6 +185,23 @@ defmodule CrucibleTapTest do
     assert {:error, report} = PlanCompiler.compile(required_plan, surface)
     assert [%{tap_id: "required"}] = report.unsupported_required
     refute CapabilityReport.ok?(report)
+  end
+
+  test "capability negotiation returns rich dropped optional reasons" do
+    surface = Surface.new!(adapter: :bumblebee, model_family: :dense_fixture, nodes: [])
+
+    optional_plan =
+      TapPlan.new!([
+        [id: "optional", signal_type: :moe_router_logits, required?: false]
+      ])
+
+    assert {:ok, %{dropped_optional: [{"optional", :no_surface_node}], satisfied: []}} =
+             CapabilityReport.negotiate(optional_plan, surface)
+
+    required_plan = TapPlan.new!([[id: "required", signal_type: :mlp_gates]])
+
+    assert {:error, %{unsupported_required: [{"required", :no_surface_node}]}} =
+             CapabilityReport.negotiate(required_plan, surface)
   end
 
   test "encodes plans to JSON" do

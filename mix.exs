@@ -59,7 +59,10 @@ defmodule CrucibleTap.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"] ++ Path.wildcard("guides/*.md"),
+      groups_for_extras: [
+        Guides: Path.wildcard("guides/*.md")
+      ],
       source_ref: "main",
       source_url: @source_url,
       homepage_url: @source_url
@@ -71,7 +74,7 @@ defmodule CrucibleTap.MixProject do
       name: "crucible_tap",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib assets mix.exs README.md LICENSE CHANGELOG.md)
+      files: ~w(lib assets guides examples mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 end

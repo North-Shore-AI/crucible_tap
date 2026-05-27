@@ -14,7 +14,8 @@
 # CrucibleTap
 
 Tap-plan and probe-contract library for selecting, bounding, and negotiating
-model-internal forward-pass observations.
+model-internal forward-pass observations. Plans are model-agnostic; surfaces
+advertise which signals and active controls they support.
 
 ## Stack Position
 
@@ -45,8 +46,8 @@ alias CrucibleTap.{PlanCompiler, Surface, TapPlan}
 
 surface =
   Surface.new!(
-    adapter: :bumblebee,
-    model_family: :qwen3,
+    adapter: :fixture,
+    model_family: :dense_decoder,
     nodes: [
       [
         id: "q-layer-2",
@@ -69,5 +70,26 @@ plan =
 
 {:ok, compiled} = PlanCompiler.compile(plan, surface)
 ```
+
+## Guides
+
+- [Quickstart](guides/quickstart.md)
+- [Concepts](guides/concepts.md)
+- [Tap Plans](guides/tap_plans.md)
+- [Selectors](guides/selectors.md)
+- [Capability Negotiation](guides/capability_negotiation.md)
+- [Plan Compilation](guides/plan_compilation.md)
+- [Working Examples](guides/working_examples.md)
+- [Testing](guides/testing.md)
+
+## Examples
+
+- `examples/build_plan_mock.exs`
+- `examples/compile_plan_live.exs`
+
+## Testing
+
+- Default suite: `mix test`
+- Full local gate: `mix ci`
 
 Documentation can be generated with `mix docs` and published to HexDocs.

@@ -11,6 +11,7 @@ defmodule CrucibleTap.TapSpec do
             signal_spec: nil,
             selector: nil,
             bounds: nil,
+            kind: :read,
             required?: true,
             metadata: %{}
 
@@ -21,6 +22,7 @@ defmodule CrucibleTap.TapSpec do
 
     with {:ok, signal_spec} <- normalize_signal_spec(attrs),
          {:ok, selector} <- normalize_selector(Map.get(attrs, :selector, %{}), signal_spec),
+         {:ok, kind} <- normalize_kind(Map.get(attrs, :kind, :read)),
          {:ok, bounds} <- CaptureBounds.new(Map.get(attrs, :bounds, %{})) do
       {:ok,
        %__MODULE__{
@@ -28,6 +30,7 @@ defmodule CrucibleTap.TapSpec do
          signal_spec: signal_spec,
          selector: selector,
          bounds: bounds,
+         kind: kind,
          required?: Map.get(attrs, :required?, signal_spec.required?),
          metadata: Map.get(attrs, :metadata, %{})
        }}
@@ -75,6 +78,9 @@ defmodule CrucibleTap.TapSpec do
 
   defp selector_from_dimension(:all), do: :any
   defp selector_from_dimension(value), do: value
+
+  defp normalize_kind(kind) when kind in [:read, :inject, :gate], do: {:ok, kind}
+  defp normalize_kind(kind), do: {:error, {:unknown_tap_kind, kind}}
 
   defp normalize_attrs(attrs) when is_list(attrs), do: attrs |> Map.new() |> normalize_attrs()
 

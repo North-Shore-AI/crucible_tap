@@ -4,7 +4,14 @@ defmodule CrucibleTap.CompiledPlan do
   """
 
   @derive Jason.Encoder
-  defstruct plan_id: nil, matched: [], report: nil, metadata: %{}
+  defstruct plan_id: nil,
+            matched: [],
+            layer_descriptors: %{},
+            global_layer_options: [],
+            hooks: [],
+            extractors: [],
+            report: nil,
+            metadata: %{}
 
   @type t :: %__MODULE__{}
 end
