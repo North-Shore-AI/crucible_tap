@@ -14,6 +14,27 @@ plan = CrucibleTap.plan!([[id: "moe", signal_type: :moe_router_logits, required?
 CrucibleTap.CapabilityReport.negotiate(plan, surface)
 ```
 
+## V4 Negotiation
+
+The provider-neutral entrypoint is `Crucible.CapabilityReport.negotiate/3`.
+It returns the compiled plan and a canonical report, or fails closed when a
+required tap is missing:
+
+```elixir
+{:ok, compiled, report} =
+  Crucible.CapabilityReport.negotiate(plan, surface,
+    provider_kind: :elixir_bumblebee,
+    model_id: "hf-internal-testing/tiny-random-gpt2",
+    backend: :binary
+  )
+
+report.optional_dropped
+```
+
+Portable layer selectors include `:first`, `:middle`, `:last`,
+`{:fraction, 0.5}`, `{:last_n, 4}`, `{:indices, [0, 6, 12]}`, and
+`{:named, "decoder.blocks.0"}`.
+
 ## Related Guides
 
 - [Plan Compilation](plan_compilation.md)

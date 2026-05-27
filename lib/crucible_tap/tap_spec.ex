@@ -79,7 +79,9 @@ defmodule CrucibleTap.TapSpec do
   defp selector_from_dimension(:all), do: :any
   defp selector_from_dimension(value), do: value
 
-  defp normalize_kind(kind) when kind in [:read, :inject, :gate], do: {:ok, kind}
+  defp normalize_kind(kind) when kind in [:read, :derive, :auxiliary, :inject, :gate],
+    do: {:ok, kind}
+
   defp normalize_kind(kind), do: {:error, {:unknown_tap_kind, kind}}
 
   defp normalize_attrs(attrs) when is_list(attrs), do: attrs |> Map.new() |> normalize_attrs()

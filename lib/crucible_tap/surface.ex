@@ -31,6 +31,7 @@ defmodule CrucibleTap.Surface do
 
   def matching_nodes(%__MODULE__{} = surface, selector) do
     selector = normalize_selector(selector)
+    selector = TapSelector.materialize(selector, surface.nodes)
     Enum.filter(surface.nodes, &TapSelector.matches?(selector, Map.from_struct(&1)))
   end
 

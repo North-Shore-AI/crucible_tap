@@ -93,3 +93,12 @@ plan =
 - Full local gate: `mix ci`
 
 Documentation can be generated with `mix docs` and published to HexDocs.
+
+## V4 Status
+
+Status: `schema-compatible`.
+
+V4 adds the provider-neutral `Crucible.CapabilityReport` contract with resource
+budgets, unsupported/failed/degraded capability descriptors, portable selector
+resolution (`:first`, `:middle`, `:last`, fractions, named nodes), and
+fail-closed negotiation for required taps.
