@@ -14,7 +14,7 @@ plan = CrucibleTap.plan!([[id: "moe", signal_type: :moe_router_logits, required?
 CrucibleTap.CapabilityReport.negotiate(plan, surface)
 ```
 
-## V4 Negotiation
+## V5 Negotiation
 
 The provider-neutral entrypoint is `Crucible.CapabilityReport.negotiate/3`.
 It returns the compiled plan and a canonical report, or fails closed when a

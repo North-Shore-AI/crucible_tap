@@ -94,11 +94,15 @@ plan =
 
 Documentation can be generated with `mix docs` and published to HexDocs.
 
-## V4 Status
+## V5 Status
 
-Status: `schema-compatible`.
+Status: `tap-capability-negotiation-passing`.
 
-V4 adds the provider-neutral `Crucible.CapabilityReport` contract with resource
-budgets, unsupported/failed/degraded capability descriptors, portable selector
-resolution (`:first`, `:middle`, `:last`, fractions, named nodes), and
-fail-closed negotiation for required taps.
+V5 keeps the provider-neutral `Crucible.CapabilityReport` contract and expands
+portable selector/capability negotiation across required and optional taps for
+hidden states, generation-step logits, attention, residual streams, MLP
+activations, KV-cache metadata, router logits, and MoE expert weights.
+
+Required unavailable taps fail closed. Optional unavailable taps degrade with
+explicit capability reasons. The V5 gate is recorded at
+`tmp/crucible_v5/transcripts/crucible_tap_mix_ci.log`.
