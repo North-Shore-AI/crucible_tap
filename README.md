@@ -94,15 +94,15 @@ plan =
 
 Documentation can be generated with `mix docs` and published to HexDocs.
 
-## V5 Status
+## Status
 
 Status: `tap-capability-negotiation-passing`.
 
-V5 keeps the provider-neutral `Crucible.CapabilityReport` contract and expands
-portable selector/capability negotiation across required and optional taps for
-hidden states, generation-step logits, attention, residual streams, MLP
-activations, KV-cache metadata, router logits, and MoE expert weights.
+The provider-neutral `Crucible.CapabilityReport` contract covers portable
+selector/capability negotiation across required and optional taps for hidden
+states, generation-step logits, attention, residual streams, MLP activations,
+KV-cache metadata, router logits, and MoE expert weights.
 
 Required unavailable taps fail closed. Optional unavailable taps degrade with
-explicit capability reasons. The V5 gate is recorded at
+explicit capability reasons. The current gate is recorded at
 `tmp/crucible_v5/transcripts/crucible_tap_mix_ci.log`.

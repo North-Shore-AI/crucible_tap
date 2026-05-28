@@ -11,10 +11,10 @@ Required taps fail closed. Optional taps are never dropped silently.
 ```elixir
 surface = CrucibleTap.Surface.new!(adapter: :fixture, model_family: :dense, nodes: [])
 plan = CrucibleTap.plan!([[id: "moe", signal_type: :moe_router_logits, required?: false]])
-CrucibleTap.CapabilityReport.negotiate(plan, surface)
+Crucible.CapabilityReport.negotiate(plan, surface, provider_kind: :fixture)
 ```
 
-## V5 Negotiation
+## Negotiation Contract
 
 The provider-neutral entrypoint is `Crucible.CapabilityReport.negotiate/3`.
 It returns the compiled plan and a canonical report, or fails closed when a
@@ -34,6 +34,10 @@ report.optional_dropped
 Portable layer selectors include `:first`, `:middle`, `:last`,
 `{:fraction, 0.5}`, `{:last_n, 4}`, `{:indices, [0, 6, 12]}`, and
 `{:named, "decoder.blocks.0"}`.
+
+`{:named, name}` materializes to a `layer_name` match rather than a numeric
+layer index. Use it for provider graph nodes that have stable names but no
+portable block index.
 
 ## Related Guides
 

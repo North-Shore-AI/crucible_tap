@@ -4,6 +4,9 @@ defmodule CrucibleTap do
 
   This package describes what to read from a model forward pass, how to bound
   capture, and how to negotiate those requests against adapter capabilities.
+
+  It owns tap plans, model surfaces, and the provider-neutral
+  `Crucible.CapabilityReport` contract.
   """
 
   @version Mix.Project.config()[:version]

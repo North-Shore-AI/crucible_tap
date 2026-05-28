@@ -1,6 +1,11 @@
 defmodule Crucible.CapabilityReport do
   @moduledoc """
-  V4/V5 provider-neutral capability negotiation report.
+  Provider-neutral capability negotiation report.
+
+  This is the public capability contract for tap negotiation. The
+  `CrucibleTap.PlanCompiler` produces an internal tap report, and this module
+  projects that report into the canonical provider-neutral shape used by
+  adapters, policy code, and operators.
   """
 
   alias Crucible.{DegradedCapability, FailedCapability, UnsupportedCapability}
@@ -20,11 +25,12 @@ defmodule Crucible.CapabilityReport do
     optional_dropped: []
   ]
 
-  @type capability :: atom()
+  @type capability :: atom() | String.t()
   @type t :: %__MODULE__{}
+  @type attrs :: keyword() | map()
 
   defmodule ResourceBudget do
-    @moduledoc "V4/V5 resource constraints advertised by a provider."
+    @moduledoc "Resource constraints advertised by a provider."
     @derive Jason.Encoder
     defstruct max_extra_forward_passes: 0,
               max_parallel_kv_caches: 1,
@@ -34,6 +40,7 @@ defmodule Crucible.CapabilityReport do
               estimated_vram_multiplier: 1.0
   end
 
+  @spec new(attrs()) :: t()
   def new(attrs \\ []) when is_list(attrs) or is_map(attrs) do
     attrs = normalize_attrs(attrs)
 
@@ -58,6 +65,8 @@ defmodule Crucible.CapabilityReport do
     }
   end
 
+  @spec negotiate(CrucibleTap.TapPlan.t(), CrucibleTap.Surface.t(), keyword()) ::
+          {:ok, CrucibleTap.CompiledPlan.t(), t()} | {:error, {:tap_compile_failed, t()}}
   def negotiate(%CrucibleTap.TapPlan{} = tap_plan, %CrucibleTap.Surface{} = surface, opts \\ []) do
     case CrucibleTap.PlanCompiler.compile(tap_plan, surface) do
       {:ok, compiled} ->
@@ -84,6 +93,7 @@ defmodule Crucible.CapabilityReport do
     end
   end
 
+  @spec from_tap_report(CrucibleTap.CapabilityReport.t(), attrs()) :: t()
   def from_tap_report(%CrucibleTap.CapabilityReport{} = report, attrs \\ []) do
     attrs = normalize_attrs(attrs)
 
@@ -122,8 +132,10 @@ defmodule Crucible.CapabilityReport do
     }
   end
 
+  @spec supports?(t(), capability()) :: boolean()
   def supports?(%__MODULE__{} = report, capability), do: capability in report.supported
 
+  @spec missing_required?(t()) :: boolean()
   def missing_required?(%__MODULE__{} = report), do: report.required_missing != []
 
   defp degraded_from_unsupported(%UnsupportedCapability{} = unsupported) do

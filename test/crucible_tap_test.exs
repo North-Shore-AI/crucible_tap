@@ -2,6 +2,8 @@ defmodule CrucibleTapTest do
   use ExUnit.Case
   doctest CrucibleTap
 
+  alias Crucible.CapabilityReport, as: CanonicalCapabilityReport
+
   alias CrucibleTap.{
     CapabilityReport,
     CaptureBounds,
@@ -252,7 +254,7 @@ defmodule CrucibleTapTest do
     assert [%{reason: :no_surface_node}] = compiled.report.unsupported_optional
   end
 
-  test "V5 signal tap classes compile when the surface exposes them" do
+  test "signal tap classes compile when the surface exposes them" do
     surface =
       Surface.new!(
         adapter: :bumblebee,
@@ -315,13 +317,28 @@ defmodule CrucibleTapTest do
         [id: "optional", signal_type: :moe_router_logits, required?: false]
       ])
 
-    assert {:ok, %{dropped_optional: [{"optional", :no_surface_node}], satisfied: []}} =
-             CapabilityReport.negotiate(optional_plan, surface)
+    assert {:ok, _compiled, report} =
+             CanonicalCapabilityReport.negotiate(optional_plan, surface)
+
+    assert report.supported == []
+    assert report.optional_dropped == ["optional"]
+
+    assert [%Crucible.UnsupportedCapability{capability: "optional", reason: :no_surface_node}] =
+             report.unsupported
 
     required_plan = TapPlan.new!([[id: "required", signal_type: :mlp_gates]])
 
-    assert {:error, %{unsupported_required: [{"required", :no_surface_node}]}} =
-             CapabilityReport.negotiate(required_plan, surface)
+    assert {:error, {:tap_compile_failed, report}} =
+             CanonicalCapabilityReport.negotiate(required_plan, surface)
+
+    assert report.required_missing == ["required"]
+
+    assert [%Crucible.FailedCapability{capability: "required", reason: :no_surface_node}] =
+             report.failed
+  end
+
+  test "tap report does not expose a duplicate negotiation entrypoint" do
+    refute function_exported?(CapabilityReport, :negotiate, 2)
   end
 
   test "encodes plans to JSON" do

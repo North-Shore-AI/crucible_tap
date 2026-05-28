@@ -1,6 +1,10 @@
 defmodule CrucibleTap.CapabilityReport do
   @moduledoc """
-  Capability negotiation result for a tap plan and model surface.
+  Internal plan-compiler capability report for a tap plan and model surface.
+
+  Public negotiation goes through `Crucible.CapabilityReport.negotiate/3`.
+  This struct stays in `crucible_tap` because it captures tap-plan matching
+  details before they are projected into the provider-neutral report.
   """
 
   @derive Jason.Encoder
@@ -14,37 +18,6 @@ defmodule CrucibleTap.CapabilityReport do
 
   @type t :: %__MODULE__{}
 
+  @spec ok?(t()) :: boolean()
   def ok?(%__MODULE__{} = report), do: report.unsupported_required == []
-
-  def negotiate(tap_plan, surface) do
-    case CrucibleTap.PlanCompiler.compile(tap_plan, surface) do
-      {:ok, compiled} ->
-        {:ok,
-         %{
-           plan: compiled,
-           satisfied: Enum.map(compiled.report.matched, & &1.tap_id),
-           dropped_optional: dropped_optional(compiled.report)
-         }}
-
-      {:error, %__MODULE__{} = report} ->
-        {:error,
-         %{
-           unsupported_required: unsupported_required(report),
-           dropped_optional: dropped_optional(report)
-         }}
-    end
-  end
-
-  defp unsupported_required(%__MODULE__{} = report) do
-    Enum.map(report.unsupported_required, &{&1.tap_id, normalize_reason(&1.reason)})
-  end
-
-  defp dropped_optional(%__MODULE__{} = report) do
-    Enum.map(report.unsupported_optional, &{&1.tap_id, normalize_reason(&1.reason)})
-  end
-
-  defp normalize_reason(:no_matching_surface_node), do: :no_surface_node
-  defp normalize_reason(:unsupported_operation), do: :surface_operation_unavailable
-  defp normalize_reason(:unsupported_capture_mode), do: :surface_capture_mode_unavailable
-  defp normalize_reason(reason), do: reason
 end

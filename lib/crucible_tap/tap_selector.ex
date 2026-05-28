@@ -12,7 +12,22 @@ defmodule CrucibleTap.TapSelector do
             metadata: %{}
 
   @type t :: %__MODULE__{}
+  @type layer_selector ::
+          :any
+          | :all
+          | :final
+          | :first
+          | :middle
+          | :last
+          | {:fraction, number()}
+          | {:last_n, pos_integer()}
+          | {:indices, [integer()]}
+          | {:named, String.t()}
+          | integer()
+          | [term()]
+  @type resolved_layer_selector :: :any | :final | integer() | [integer()] | {:named, String.t()}
 
+  @spec new(keyword() | map()) :: {:ok, t()}
   def new(attrs \\ []) when is_list(attrs) or is_map(attrs) do
     attrs = normalize_attrs(attrs)
 
@@ -27,11 +42,13 @@ defmodule CrucibleTap.TapSelector do
      })}
   end
 
+  @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []) do
     {:ok, selector} = new(attrs)
     selector
   end
 
+  @spec matches?(t(), map()) :: boolean()
   def matches?(%__MODULE__{} = selector, node) do
     matches_value?(selector.signal_type, Map.get(node, :signal_type)) and
       matches_value?(selector.layer, Map.get(node, :layer_index)) and
@@ -40,6 +57,13 @@ defmodule CrucibleTap.TapSelector do
       matches_name?(selector.layer_name, Map.get(node, :layer_name))
   end
 
+  @doc """
+  Materializes portable layer selectors against a concrete surface.
+
+  Named layer selectors are converted into `layer_name` matches instead of
+  numeric layer indexes because providers expose named graph nodes differently.
+  """
+  @spec materialize(t(), [map()]) :: t()
   def materialize(%__MODULE__{} = selector, nodes) when is_list(nodes) do
     block_count = block_count(nodes)
 
@@ -52,6 +76,8 @@ defmodule CrucibleTap.TapSelector do
     end
   end
 
+  @doc "Resolves portable layer selectors into concrete numeric indexes."
+  @spec resolve_layers(layer_selector(), non_neg_integer()) :: resolved_layer_selector()
   def resolve_layers(:any, _block_count), do: :any
   def resolve_layers(nil, _block_count), do: :any
   def resolve_layers(:all, _block_count), do: :any
@@ -89,6 +115,12 @@ defmodule CrucibleTap.TapSelector do
 
   def resolve_layers(layer, _block_count), do: layer
 
+  @spec parse_keyword(atom() | String.t() | term()) ::
+          {:ok, layer_selector()}
+          | {:error,
+             {:unknown_selector_keyword, term()}
+             | {:invalid_fraction_selector, String.t()}
+             | {:invalid_last_n_selector, String.t()}}
   def parse_keyword(value) when is_atom(value), do: {:ok, value}
 
   def parse_keyword(value) when is_binary(value) do
