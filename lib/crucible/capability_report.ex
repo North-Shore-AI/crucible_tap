@@ -1,6 +1,6 @@
 defmodule Crucible.CapabilityReport do
   @moduledoc """
-  V4 provider-neutral capability negotiation report.
+  V4/V5 provider-neutral capability negotiation report.
   """
 
   alias Crucible.{DegradedCapability, FailedCapability, UnsupportedCapability}
@@ -24,7 +24,7 @@ defmodule Crucible.CapabilityReport do
   @type t :: %__MODULE__{}
 
   defmodule ResourceBudget do
-    @moduledoc "V4 resource constraints advertised by a provider."
+    @moduledoc "V4/V5 resource constraints advertised by a provider."
     @derive Jason.Encoder
     defstruct max_extra_forward_passes: 0,
               max_parallel_kv_caches: 1,
