@@ -285,6 +285,182 @@ defmodule CrucibleTapTest do
              ~w(attn experts kv mlp resid router)
   end
 
+  test "required raw capture disallowed by bounds fails closed" do
+    surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [
+          [
+            id: "resid",
+            signal_type: :residual_stream,
+            operations: [:read],
+            capture_modes: [:summary, :raw]
+          ]
+        ]
+      )
+
+    required_plan =
+      TapPlan.new!([
+        [
+          id: "raw-resid",
+          signal_type: :residual_stream,
+          capture_mode: :raw,
+          required?: true
+        ]
+      ])
+
+    assert {:error, report} = PlanCompiler.compile(required_plan, surface)
+    assert [%{tap_id: "raw-resid", reason: :raw_capture_disallowed}] = report.unsupported_required
+  end
+
+  test "optional raw capture disallowed by bounds degrades explicitly" do
+    surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [
+          [
+            id: "resid",
+            signal_type: :residual_stream,
+            operations: [:read],
+            capture_modes: [:summary, :raw]
+          ]
+        ]
+      )
+
+    optional_plan =
+      TapPlan.new!([
+        [
+          id: "raw-resid",
+          signal_type: :residual_stream,
+          capture_mode: :raw,
+          required?: false
+        ]
+      ])
+
+    assert {:ok, compiled} = PlanCompiler.compile(optional_plan, surface)
+
+    assert [%{tap_id: "raw-resid", reason: :raw_capture_disallowed}] =
+             compiled.report.unsupported_optional
+  end
+
+  test "required unsupported capture mode fails closed when raw is allowed" do
+    surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [
+          [
+            id: "resid",
+            signal_type: :residual_stream,
+            operations: [:read],
+            capture_modes: [:summary]
+          ]
+        ]
+      )
+
+    required_plan =
+      TapPlan.new!([
+        [
+          id: "raw-resid",
+          signal_type: :residual_stream,
+          capture_mode: :raw,
+          bounds: [raw_allowed?: true],
+          required?: true
+        ]
+      ])
+
+    assert {:error, report} = PlanCompiler.compile(required_plan, surface)
+
+    assert [%{tap_id: "raw-resid", reason: :unsupported_capture_mode}] =
+             report.unsupported_required
+  end
+
+  test "optional unsupported capture mode degrades explicitly when raw is allowed" do
+    surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [
+          [
+            id: "resid",
+            signal_type: :residual_stream,
+            operations: [:read],
+            capture_modes: [:summary]
+          ]
+        ]
+      )
+
+    optional_plan =
+      TapPlan.new!([
+        [
+          id: "raw-resid",
+          signal_type: :residual_stream,
+          capture_mode: :raw,
+          bounds: [raw_allowed?: true],
+          required?: false
+        ]
+      ])
+
+    assert {:ok, compiled} = PlanCompiler.compile(optional_plan, surface)
+
+    assert [%{tap_id: "raw-resid", reason: :unsupported_capture_mode}] =
+             compiled.report.unsupported_optional
+  end
+
+  test "capability report JSON roundtrips" do
+    report =
+      CanonicalCapabilityReport.new(
+        provider_kind: :fixture,
+        model_id: "model:fixture",
+        model_family: :dense_fixture,
+        backend: :fixture,
+        supported: ["final-logits"],
+        unsupported: [
+          %Crucible.UnsupportedCapability{
+            capability: "hidden",
+            reason: :no_surface_node,
+            required?: false,
+            metadata: %{}
+          }
+        ],
+        required_missing: [],
+        optional_dropped: ["hidden"]
+      )
+
+    assert {:ok, json} = Jason.encode(report)
+    assert {:ok, decoded} = Jason.decode(json)
+    assert decoded["provider_kind"] == "fixture"
+    assert decoded["model_id"] == "model:fixture"
+    assert decoded["optional_dropped"] == ["hidden"]
+    assert [%{"capability" => "hidden", "reason" => "no_surface_node"}] = decoded["unsupported"]
+  end
+
+  test "gate taps cannot be satisfied by passive read-only nodes" do
+    passive_surface =
+      Surface.new!(
+        adapter: :bumblebee,
+        model_family: :fixture,
+        nodes: [[id: "resid", signal_type: :residual_stream, operations: [:read]]]
+      )
+
+    gate_plan = TapPlan.new!([[id: "gate", signal_type: :residual_stream, kind: :gate]])
+
+    assert {:error, report} = PlanCompiler.compile(gate_plan, passive_surface)
+    assert [%{reason: :unsupported_operation}] = report.unsupported_required
+
+    active_surface =
+      Surface.new!(
+        adapter: :native_fixture,
+        model_family: :fixture,
+        nodes: [[id: "resid", signal_type: :residual_stream, operations: [:read, :gate]]]
+      )
+
+    assert {:ok, compiled} = PlanCompiler.compile(gate_plan, active_surface)
+    assert [%{metadata: %{active?: true, required_operation: :gate}}] = compiled.matched
+  end
+
   test "active taps cannot be satisfied by passive read-only nodes" do
     passive_surface =
       Surface.new!(
@@ -347,5 +523,23 @@ defmodule CrucibleTapTest do
     assert {:ok, json} = Jason.encode(plan)
     assert {:ok, decoded} = Jason.decode(json)
     assert decoded["plan_id"] == "plan-json"
+  end
+
+  test "compiled plan JSON roundtrips" do
+    surface =
+      Surface.new!(
+        adapter: :fixture,
+        model_family: :dense_fixture,
+        nodes: [[id: "logits", signal_type: :final_logits, operations: [:read]]]
+      )
+
+    plan = TapPlan.new!([[id: "logits", signal_type: :final_logits]])
+    assert {:ok, compiled} = PlanCompiler.compile(plan, surface)
+
+    assert {:ok, json} = Jason.encode(compiled)
+    assert {:ok, decoded} = Jason.decode(json)
+    assert decoded["plan_id"] == compiled.plan_id
+    assert [%{"tap_id" => "logits"}] = decoded["matched"]
+    assert decoded["report"]["adapter"] == "fixture"
   end
 end

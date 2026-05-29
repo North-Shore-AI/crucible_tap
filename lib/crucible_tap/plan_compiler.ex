@@ -72,6 +72,9 @@ defmodule CrucibleTap.PlanCompiler do
 
   defp compile_node(%TapSpec{} = spec, node, %Surface{} = surface) do
     cond do
+      spec.signal_spec.capture_mode == :raw and not spec.bounds.raw_allowed? ->
+        unsupported_result(spec, :raw_capture_disallowed, surface, node)
+
       required_operation(spec) not in node.operations ->
         unsupported_result(spec, :unsupported_operation, surface, node)
 
