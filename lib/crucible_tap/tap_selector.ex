@@ -150,7 +150,6 @@ defmodule CrucibleTap.TapSelector do
     nodes
     |> Enum.map(fn
       %{layer_index: index} -> index
-      node when is_map(node) -> Map.get(node, :layer_index)
       _node -> nil
     end)
     |> Enum.filter(&is_integer/1)

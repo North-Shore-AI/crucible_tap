@@ -140,20 +140,7 @@ defmodule CrucibleTap.PlanCompiler do
     |> Map.new()
   end
 
-  defp global_options(%TapPlan{} = plan) do
-    if Enum.any?(
-         plan.specs,
-         &(&1.signal_spec.signal_type in [
-             :middle_residuals,
-             :layer_trajectory,
-             :logit_lens_intermediate
-           ])
-       ) do
-      [output_hidden_states: true]
-    else
-      []
-    end
-  end
+  defp global_options(%TapPlan{}), do: []
 
   defp hooks(%CapabilityReport{} = report) do
     report.matched

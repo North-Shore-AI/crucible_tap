@@ -195,7 +195,7 @@ defmodule CrucibleTapTest do
 
     assert {:ok, compiled} = PlanCompiler.compile(plan, surface)
     assert compiled.layer_descriptors[4].capture == :compressed_vector
-    assert compiled.global_layer_options == [output_hidden_states: true]
+    assert compiled.global_layer_options == []
   end
 
   test "plan compiler reports unsupported optional and required taps" do
