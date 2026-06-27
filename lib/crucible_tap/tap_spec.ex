@@ -3,7 +3,7 @@ defmodule CrucibleTap.TapSpec do
   One requested model-internal observation.
   """
 
-  alias CrucibleSignal.SignalSpec
+  alias CrucibleSignal.{ActivationMetadata, SafeTerms, SignalSpec}
   alias CrucibleTap.{CaptureBounds, TapSelector}
 
   @derive Jason.Encoder
@@ -23,7 +23,8 @@ defmodule CrucibleTap.TapSpec do
     with {:ok, signal_spec} <- normalize_signal_spec(attrs),
          {:ok, selector} <- normalize_selector(Map.get(attrs, :selector, %{}), signal_spec),
          {:ok, kind} <- normalize_kind(Map.get(attrs, :kind, :read)),
-         {:ok, bounds} <- CaptureBounds.new(Map.get(attrs, :bounds, %{})) do
+         {:ok, bounds} <- CaptureBounds.new(Map.get(attrs, :bounds, %{})),
+         {:ok, metadata} <- normalize_metadata(attrs, signal_spec) do
       {:ok,
        %__MODULE__{
          id: Map.get(attrs, :id, signal_spec.id),
@@ -32,7 +33,7 @@ defmodule CrucibleTap.TapSpec do
          bounds: bounds,
          kind: kind,
          required?: Map.get(attrs, :required?, signal_spec.required?),
-         metadata: Map.get(attrs, :metadata, %{})
+         metadata: metadata
        }}
     end
   end
@@ -59,8 +60,10 @@ defmodule CrucibleTap.TapSpec do
       :heads,
       :operations,
       :capture_mode,
-      :required?
+      :required?,
+      :metadata
     ])
+    |> put_activation_metadata(attrs)
     |> Map.put_new(:signal_type, Map.get(attrs, :signal_type))
     |> SignalSpec.new()
   end
@@ -75,6 +78,8 @@ defmodule CrucibleTap.TapSpec do
       |> Map.put_new(:layer, selector_from_dimension(signal_spec.layers))
       |> Map.put_new(:token, selector_from_dimension(signal_spec.tokens))
       |> Map.put_new(:head, selector_from_dimension(signal_spec.heads))
+      |> Map.put_new(:activation_name, Map.get(signal_spec.metadata, :activation_name))
+      |> Map.put_new(:component, Map.get(signal_spec.metadata, :component))
 
     TapSelector.new(selector_attrs)
   end
@@ -87,12 +92,38 @@ defmodule CrucibleTap.TapSpec do
 
   defp normalize_kind(kind), do: {:error, {:unknown_tap_kind, kind}}
 
-  defp normalize_attrs(attrs) when is_list(attrs), do: attrs |> Map.new() |> normalize_attrs()
-
-  defp normalize_attrs(attrs) when is_map(attrs) do
-    Map.new(attrs, fn
-      {key, value} when is_binary(key) -> {String.to_atom(key), value}
-      {key, value} -> {key, value}
-    end)
+  defp normalize_metadata(attrs, signal_spec) do
+    attrs
+    |> Map.get(:metadata, %{})
+    |> Map.merge(signal_spec.metadata)
+    |> ActivationMetadata.normalize()
   end
+
+  defp put_activation_metadata(signal_attrs, attrs) do
+    metadata =
+      attrs
+      |> Map.get(:metadata, %{})
+      |> merge_metadata_field(attrs, :activation_name)
+      |> merge_metadata_field(attrs, :component)
+      |> merge_metadata_field(attrs, :axes)
+      |> maybe_default_axes()
+
+    Map.put(signal_attrs, :metadata, metadata)
+  end
+
+  defp merge_metadata_field(metadata, attrs, field) do
+    case Map.fetch(attrs, field) do
+      {:ok, nil} -> metadata
+      {:ok, value} -> Map.put_new(metadata, field, value)
+      :error -> metadata
+    end
+  end
+
+  defp maybe_default_axes(%{activation_name: activation_name} = metadata)
+       when is_binary(activation_name),
+       do: Map.put_new(metadata, :axes, ActivationMetadata.default_axes(activation_name))
+
+  defp maybe_default_axes(metadata), do: metadata
+
+  defp normalize_attrs(attrs), do: SafeTerms.normalize_attrs(attrs)
 end

@@ -90,6 +90,9 @@ defmodule CrucibleTap.PlanCompiler do
             layer_name: node.layer_name,
             kind: spec.kind,
             active?: TapSpec.active?(spec),
+            activation_name: node.activation_name,
+            component: node.component,
+            axes: node.axes,
             layer_index: node.layer_index,
             required_operation: required_operation(spec),
             capture_mode: spec.signal_spec.capture_mode
@@ -110,6 +113,9 @@ defmodule CrucibleTap.PlanCompiler do
         limitation: :surface,
         adapter: surface.adapter,
         model_family: surface.model_family,
+        activation_name: spec.selector.activation_name,
+        component: spec.selector.component,
+        axes: spec.selector.axes,
         required_operation: required_operation(spec),
         capture_mode: spec.signal_spec.capture_mode
       }

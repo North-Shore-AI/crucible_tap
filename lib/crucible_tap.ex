@@ -19,4 +19,7 @@ defmodule CrucibleTap do
 
   @doc "Builds a plan-level trajectory tap from multiple layer captures."
   defdelegate trajectory_tap(id, layers, opts \\ []), to: CrucibleTap.PlanBuilder
+
+  @doc "Builds a single canonical activation tap plan."
+  defdelegate activation_tap(id, activation_name, opts \\ []), to: CrucibleTap.PlanBuilder
 end

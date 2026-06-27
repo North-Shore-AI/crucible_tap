@@ -51,6 +51,34 @@ defmodule CrucibleTapTest do
     refute TapSelector.matches?(%{selector | head: 4}, Map.from_struct(node))
   end
 
+  test "selectors match canonical activation names and axis metadata" do
+    node =
+      SurfaceNode.new!(
+        id: "q0",
+        signal_type: :attention_q,
+        activation_name: "blocks.0.attn.hook_q",
+        layer_name: "decoder.blocks.0.self_attention.query",
+        capture_modes: [:summary, :raw]
+      )
+
+    selector =
+      TapSelector.new!(
+        activation_name: "blocks.0.attn.hook_q",
+        component: "attn",
+        axes: ["head", "d_head"]
+      )
+
+    assert node.layer_index == 0
+    assert node.activation_name == "blocks.0.attn.hook_q"
+    assert node.axes == [:batch, :pos, :head, :d_head]
+    assert TapSelector.matches?(selector, Map.from_struct(node))
+
+    refute TapSelector.matches?(
+             %{selector | activation_name: "blocks.1.attn.hook_q"},
+             Map.from_struct(node)
+           )
+  end
+
   test "builds tap specs and plans" do
     spec =
       TapSpec.new!(
@@ -106,6 +134,22 @@ defmodule CrucibleTapTest do
     assert Enum.map(plan.specs, & &1.signal_spec.layers) == [[4], [8], [12]]
     assert Enum.all?(plan.specs, &(&1.signal_spec.capture_mode == :compressed_vector))
     assert Enum.all?(plan.specs, &(&1.kind == :read))
+  end
+
+  test "builds canonical activation taps as plan-level combinators" do
+    plan =
+      CrucibleTap.activation_tap("q0", "blocks.0.attn.hook_q",
+        capture_mode: :raw,
+        bounds: [raw_allowed?: true]
+      )
+
+    [spec] = plan.specs
+
+    assert spec.signal_spec.signal_type == :attention_q
+    assert spec.signal_spec.layers == [0]
+    assert spec.signal_spec.capture_mode == :raw
+    assert spec.selector.activation_name == "blocks.0.attn.hook_q"
+    assert spec.metadata.axes == [:batch, :pos, :head, :d_head]
   end
 
   test "surfaces expose capabilities" do
@@ -166,6 +210,65 @@ defmodule CrucibleTapTest do
     assert [%{tap_id: "q-layer-2", surface_node_id: "q"}] = compiled.matched
     assert compiled.hooks == ["decoder.blocks.2.self_attention.query"]
     assert CapabilityReport.ok?(compiled.report)
+  end
+
+  test "plan compiler matches supported taps by activation name" do
+    surface =
+      Surface.new!(
+        adapter: :native_fixture,
+        model_family: :fixture_decoder,
+        nodes: [
+          [
+            id: "q0",
+            signal_type: :attention_q,
+            activation_name: "blocks.0.attn.hook_q",
+            layer_name: "decoder.blocks.0.self_attention.query",
+            operations: [:read],
+            capture_modes: [:summary, :raw]
+          ],
+          [
+            id: "q1",
+            signal_type: :attention_q,
+            activation_name: "blocks.1.attn.hook_q",
+            layer_name: "decoder.blocks.1.self_attention.query",
+            operations: [:read],
+            capture_modes: [:summary, :raw]
+          ]
+        ]
+      )
+
+    plan =
+      CrucibleTap.activation_tap("q0-read", "blocks.0.attn.hook_q",
+        capture_mode: :raw,
+        bounds: [raw_allowed?: true]
+      )
+
+    assert {:ok, compiled} = PlanCompiler.compile(plan, surface)
+
+    assert [%{tap_id: "q0-read", surface_node_id: "q0"}] = compiled.matched
+    assert hd(compiled.matched).metadata.activation_name == "blocks.0.attn.hook_q"
+    assert hd(compiled.matched).metadata.axes == [:batch, :pos, :head, :d_head]
+  end
+
+  test "surface capabilities preserve canonical activation metadata" do
+    surface =
+      Surface.new!(
+        adapter: :native_fixture,
+        model_family: :fixture_decoder,
+        nodes: [
+          [
+            id: "pattern",
+            signal_type: :attention_weights,
+            activation_name: "blocks.2.attn.hook_pattern"
+          ]
+        ]
+      )
+
+    [capability] = Surface.capabilities(surface)
+
+    assert capability.metadata.activation_name == "blocks.2.attn.hook_pattern"
+    assert capability.metadata.axes == [:batch, :head, :dest_pos, :src_pos]
+    assert capability.metadata.surface_node_id == "pattern"
   end
 
   test "plan compiler emits per-layer descriptors" do

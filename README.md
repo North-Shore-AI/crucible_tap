@@ -71,6 +71,39 @@ plan =
 {:ok, compiled} = PlanCompiler.compile(plan, surface)
 ```
 
+## Canonical Activation Taps
+
+Tap plans can select TransformerLens-compatible activation names instead of
+provider graph node names:
+
+```elixir
+surface =
+  Surface.new!(
+    adapter: :native_fixture,
+    model_family: :dense_decoder,
+    nodes: [
+      [
+        id: "q0",
+        signal_type: :attention_q,
+        activation_name: "blocks.0.attn.hook_q",
+        capture_modes: [:summary, :raw]
+      ]
+    ]
+  )
+
+plan =
+  CrucibleTap.activation_tap("q0-raw", "blocks.0.attn.hook_q",
+    capture_mode: :raw,
+    bounds: [raw_allowed?: true]
+  )
+
+{:ok, compiled} = PlanCompiler.compile(plan, surface)
+```
+
+Raw capture remains fail-closed unless the plan explicitly permits raw capture
+through bounds and the surface node advertises `:raw`. Active taps still require
+matching active operations: `:inject` needs `:fuse`, and `:gate` needs `:gate`.
+
 ## Guides
 
 - [Quickstart](guides/quickstart.md)

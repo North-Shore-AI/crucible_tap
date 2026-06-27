@@ -5,6 +5,9 @@ defmodule CrucibleTap.TapSelector do
 
   @derive Jason.Encoder
   defstruct signal_type: nil,
+            activation_name: nil,
+            component: nil,
+            axes: nil,
             layer: :any,
             token: :any,
             head: :any,
@@ -27,30 +30,42 @@ defmodule CrucibleTap.TapSelector do
           | [term()]
   @type resolved_layer_selector :: :any | :final | integer() | [integer()] | {:named, String.t()}
 
-  @spec new(keyword() | map()) :: {:ok, t()}
+  @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []) when is_list(attrs) or is_map(attrs) do
     attrs = normalize_attrs(attrs)
 
-    {:ok,
-     struct(__MODULE__, %{
-       signal_type: Map.get(attrs, :signal_type),
-       layer: Map.get(attrs, :layer, :any),
-       token: Map.get(attrs, :token, :any),
-       head: Map.get(attrs, :head, :any),
-       layer_name: Map.get(attrs, :layer_name, :any),
-       metadata: Map.get(attrs, :metadata, %{})
-     })}
+    with {:ok, activation_name} <- normalize_activation_name(attrs),
+         {:ok, component} <- normalize_component(attrs),
+         {:ok, axes} <- normalize_axes(attrs) do
+      {:ok,
+       struct(__MODULE__, %{
+         signal_type: Map.get(attrs, :signal_type),
+         activation_name: activation_name,
+         component: component,
+         axes: axes,
+         layer: Map.get(attrs, :layer, :any),
+         token: Map.get(attrs, :token, :any),
+         head: Map.get(attrs, :head, :any),
+         layer_name: Map.get(attrs, :layer_name, :any),
+         metadata: Map.get(attrs, :metadata, %{})
+       })}
+    end
   end
 
   @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []) do
-    {:ok, selector} = new(attrs)
-    selector
+    case new(attrs) do
+      {:ok, selector} -> selector
+      {:error, reason} -> raise ArgumentError, "invalid tap selector: #{inspect(reason)}"
+    end
   end
 
   @spec matches?(t(), map()) :: boolean()
   def matches?(%__MODULE__{} = selector, node) do
     matches_value?(selector.signal_type, Map.get(node, :signal_type)) and
+      matches_value?(selector.activation_name, node_value(node, :activation_name)) and
+      matches_value?(selector.component, node_value(node, :component)) and
+      matches_axes?(selector.axes, node_value(node, :axes)) and
       matches_value?(selector.layer, Map.get(node, :layer_index)) and
       matches_value?(selector.token, Map.get(node, :token_index)) and
       matches_value?(selector.head, Map.get(node, :head_index)) and
@@ -188,12 +203,65 @@ defmodule CrucibleTap.TapSelector do
 
   defp matches_name?(_pattern, _name), do: false
 
-  defp normalize_attrs(attrs) when is_list(attrs), do: attrs |> Map.new() |> normalize_attrs()
+  defp normalize_attrs(attrs), do: CrucibleSignal.SafeTerms.normalize_attrs(attrs)
 
-  defp normalize_attrs(attrs) when is_map(attrs) do
-    Map.new(attrs, fn
-      {key, value} when is_binary(key) -> {String.to_atom(key), value}
-      {key, value} -> {key, value}
-    end)
+  defp normalize_activation_name(attrs) do
+    activation_name = Map.get(attrs, :activation_name) || metadata_value(attrs, :activation_name)
+
+    case activation_name do
+      nil ->
+        {:ok, nil}
+
+      activation_name when is_binary(activation_name) ->
+        case CrucibleSignal.ActivationMetadata.parse_name(activation_name) do
+          {:ok, parsed} -> {:ok, parsed.name}
+          {:error, reason} -> {:error, {:invalid_activation_name, activation_name, reason}}
+        end
+
+      activation_name ->
+        {:error, {:invalid_activation_name, activation_name}}
+    end
   end
+
+  defp normalize_component(attrs) do
+    metadata = Map.get(attrs, :metadata, %{})
+    component = Map.get(attrs, :component) || Map.get(metadata, :component)
+
+    case CrucibleSignal.ActivationMetadata.normalize(%{component: component}) do
+      {:ok, %{component: component}} -> {:ok, component}
+      {:ok, _metadata} -> {:ok, nil}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp normalize_axes(attrs) do
+    metadata = Map.get(attrs, :metadata, %{})
+    axes = Map.get(attrs, :axes) || Map.get(metadata, :axes)
+
+    case CrucibleSignal.ActivationMetadata.normalize(%{axes: axes}) do
+      {:ok, %{axes: axes}} -> {:ok, axes}
+      {:ok, _metadata} -> {:ok, nil}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp metadata_value(%{metadata: metadata}, key) when is_map(metadata),
+    do: Map.get(metadata, key)
+
+  defp metadata_value(_attrs, _key), do: nil
+
+  defp node_value(node, key) do
+    Map.get(node, key) || metadata_value(node, key)
+  end
+
+  defp matches_axes?(nil, _node_axes), do: true
+  defp matches_axes?(:any, _node_axes), do: true
+  defp matches_axes?([], _node_axes), do: true
+
+  defp matches_axes?(selector_axes, node_axes)
+       when is_list(selector_axes) and is_list(node_axes) do
+    Enum.all?(selector_axes, &(&1 in node_axes))
+  end
+
+  defp matches_axes?(selector_axes, node_axes), do: selector_axes == node_axes
 end

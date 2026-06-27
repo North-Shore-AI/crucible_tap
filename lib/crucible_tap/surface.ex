@@ -3,7 +3,7 @@ defmodule CrucibleTap.Surface do
   Adapter-declared observable model surface.
   """
 
-  alias CrucibleSignal.Capability
+  alias CrucibleSignal.{Capability, SafeTerms}
   alias CrucibleTap.{SurfaceNode, TapSelector}
 
   @derive Jason.Encoder
@@ -43,7 +43,14 @@ defmodule CrucibleTap.Surface do
         capture_modes: node.capture_modes,
         adapter: surface.adapter,
         model_family: surface.model_family,
-        metadata: %{surface_node_id: node.id, layer_name: node.layer_name}
+        metadata:
+          Map.merge(node.metadata, %{
+            surface_node_id: node.id,
+            layer_name: node.layer_name,
+            activation_name: node.activation_name,
+            component: node.component,
+            axes: node.axes
+          })
       )
     end)
   end
@@ -54,12 +61,5 @@ defmodule CrucibleTap.Surface do
   defp normalize_selector(%TapSelector{} = selector), do: selector
   defp normalize_selector(attrs), do: TapSelector.new!(attrs)
 
-  defp normalize_attrs(attrs) when is_list(attrs), do: attrs |> Map.new() |> normalize_attrs()
-
-  defp normalize_attrs(attrs) when is_map(attrs) do
-    Map.new(attrs, fn
-      {key, value} when is_binary(key) -> {String.to_atom(key), value}
-      {key, value} -> {key, value}
-    end)
-  end
+  defp normalize_attrs(attrs), do: SafeTerms.normalize_attrs(attrs)
 end
