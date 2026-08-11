@@ -30,6 +30,14 @@ defmodule CrucibleTap.TapSelector do
           | [term()]
   @type resolved_layer_selector :: :any | :final | integer() | [integer()] | {:named, String.t()}
 
+  @keyword_selectors %{
+    "first" => :first,
+    "middle" => :middle,
+    "last" => :last,
+    "all" => :all,
+    "final" => :final
+  }
+
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []) when is_list(attrs) or is_map(attrs) do
     attrs = normalize_attrs(attrs)
@@ -139,20 +147,24 @@ defmodule CrucibleTap.TapSelector do
   def parse_keyword(value) when is_atom(value), do: {:ok, value}
 
   def parse_keyword(value) when is_binary(value) do
-    case String.trim(value) do
-      "first" -> {:ok, :first}
-      "middle" -> {:ok, :middle}
-      "last" -> {:ok, :last}
-      "all" -> {:ok, :all}
-      "final" -> {:ok, :final}
+    value = String.trim(value)
+
+    case Map.fetch(@keyword_selectors, value) do
+      {:ok, selector} -> {:ok, selector}
+      :error -> parse_compound_keyword(value)
+    end
+  end
+
+  def parse_keyword(value), do: {:error, {:unknown_selector_keyword, value}}
+
+  defp parse_compound_keyword(value) do
+    case value do
       "fraction:" <> rest -> parse_fraction(rest)
       "last_n:" <> rest -> parse_last_n(rest)
       "named:" <> rest -> {:ok, {:named, rest}}
       other -> {:error, {:unknown_selector_keyword, other}}
     end
   end
-
-  def parse_keyword(value), do: {:error, {:unknown_selector_keyword, value}}
 
   defp matches_value?(nil, _value), do: true
   defp matches_value?(:any, _value), do: true

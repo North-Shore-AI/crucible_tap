@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.0 - 2026-08-10
+
 - Added V4 `Crucible.CapabilityReport`, resource budget, unsupported/failed/
   degraded descriptors, and canonical tap negotiation.
 - Added V5 selector and capability negotiation for required/optional hidden

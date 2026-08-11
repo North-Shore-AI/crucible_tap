@@ -29,13 +29,7 @@ defmodule CrucibleTap.PlanCompiler do
             {matched, required, node_unsupported ++ optional}
 
           true ->
-            result = unsupported_result(spec, :no_surface_node, surface)
-
-            if spec.required? do
-              {matched, [result | required], optional}
-            else
-              {matched, required, [result | optional]}
-            end
+            categorize_missing_node(spec, surface, matched, required, optional)
         end
       end)
 
@@ -68,6 +62,16 @@ defmodule CrucibleTap.PlanCompiler do
     nodes
     |> Enum.map(&compile_node(spec, &1, surface))
     |> Enum.split_with(&(&1.status == :matched))
+  end
+
+  defp categorize_missing_node(spec, surface, matched, required, optional) do
+    result = unsupported_result(spec, :no_surface_node, surface)
+
+    if spec.required? do
+      {matched, [result | required], optional}
+    else
+      {matched, required, [result | optional]}
+    end
   end
 
   defp compile_node(%TapSpec{} = spec, node, %Surface{} = surface) do

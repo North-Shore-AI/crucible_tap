@@ -12,6 +12,7 @@ defmodule CrucibleTap.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
+      dialyzer: dialyzer(),
       name: "CrucibleTap",
       description: "Tap plans and probe contracts for bounded model-internal observations",
       source_url: @source_url,
@@ -38,11 +39,15 @@ defmodule CrucibleTap.MixProject do
 
   defp deps do
     [
-      {:crucible_signal, path: "../crucible_signal"},
+      workspace_dep(:crucible_signal, "~> 0.1.0", "../crucible_signal"),
       {:jason, "~> 1.4"},
-      {:ex_doc, "~> 0.40.3", only: [:dev, :test], runtime: false}
+      {:ex_doc, "~> 0.40.3", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.7", only: [:dev], runtime: false}
     ]
   end
+
+  defp dialyzer, do: [plt_core_path: "_build/plts/core"]
 
   defp aliases do
     [
@@ -51,7 +56,9 @@ defmodule CrucibleTap.MixProject do
         "format --check-formatted",
         "compile --warnings-as-errors",
         "test",
-        "docs"
+        "credo --strict",
+        "dialyzer",
+        "docs --warnings-as-errors"
       ]
     ]
   end
@@ -63,7 +70,7 @@ defmodule CrucibleTap.MixProject do
       groups_for_extras: [
         Guides: Path.wildcard("guides/*.md")
       ],
-      source_ref: "main",
+      source_ref: "v#{@version}",
       source_url: @source_url,
       homepage_url: @source_url
     ]
@@ -76,5 +83,17 @@ defmodule CrucibleTap.MixProject do
       links: %{"GitHub" => @source_url},
       files: ~w(lib assets guides examples mix.exs README.md LICENSE CHANGELOG.md)
     ]
+  end
+
+  defp workspace_dep(app, requirement, sibling) do
+    if publish_task?() do
+      {app, requirement}
+    else
+      {app, path: Path.expand(sibling, __DIR__)}
+    end
+  end
+
+  defp publish_task? do
+    Enum.any?(System.argv(), &(&1 in ["hex.build", "hex.publish"]))
   end
 end
